@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Airfoil Surrogate: Project Report</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+/* Layout: a technical report on one long page. Numbered sections because the argument runs in order
+   (question, data, method, results, optimisation, stall). Ink on paper, hairline rules, red only for "outside the data". */
+:root{--paper:#fbfbfa;--ink:#161616;--ink2:#58595b;--rule:#161616;--hair:#c9c9c6;--red:#c4281c;--f:"Libre Franklin","Helvetica Neue",Arial,sans-serif;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#141414;--ink:#ececea;--ink2:#a3a4a6;--rule:#ececea;--hair:#3b3b3a;--red:#ff6b5c;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#141414;--ink:#ececea;--ink2:#a3a4a6;--rule:#ececea;--hair:#3b3b3a;--red:#ff6b5c;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f);font-size:16.5px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px}
+.page{max-width:860px;margin:0 auto}
+a{color:var(--ink);text-underline-offset:3px}
+h1{font-size:32px;line-height:1.18;font-weight:700;margin:0 0 10px;letter-spacing:-.015em;text-wrap:balance}
+h2{font-size:21px;line-height:1.25;font-weight:700;margin:0 0 10px;text-wrap:balance}
+h2 .n{color:var(--ink2);font-weight:400;margin-right:10px;font-variant-numeric:tabular-nums}
+h3{font-size:16.5px;margin:20px 0 6px}
+p{margin:0 0 13px;max-width:68ch}
+section{padding-top:30px;margin-top:30px;border-top:1px solid var(--rule)}
+.by{color:var(--ink2);font-size:15px;margin:0 0 14px;max-width:70ch}
+.links{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:15px;margin:14px 0 0}
+.toc{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:14px;color:var(--ink2);margin-top:18px}
+.toc a{color:var(--ink2)}
+.glance{margin:20px 0 0;padding:0;max-width:none;list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border-top:1.5px solid var(--rule);border-left:1.5px solid var(--rule)}
+.glance li{padding:12px 14px;border-right:1.5px solid var(--rule);border-bottom:1.5px solid var(--rule);font-size:15px;min-width:0}
+.glance b{display:block;font-size:24px;font-weight:500;line-height:1.2;font-variant-numeric:tabular-nums}
+.glance .red b{color:var(--red)}
+@media(max-width:640px){.glance{grid-template-columns:minmax(0,1fr)}}
+.tbl{overflow-x:auto;margin:10px 0 6px}
+table{border-collapse:collapse;font-size:14.5px;min-width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:6px 12px 6px 0;text-align:left;vertical-align:top;border-bottom:1px solid var(--hair);white-space:nowrap}
+th{font-weight:700;border-bottom:1.5px solid var(--rule);white-space:normal}
+td.w{white-space:normal}
+td.num,th.num{text-align:right;padding-right:16px}
+tr.best td{font-weight:700}
+figure{margin:18px 0 0}
+figure img{display:block;width:100%;height:auto;border:1px solid var(--hair);background:#fff}
+figcaption{font-size:14px;color:var(--ink2);margin-top:7px;max-width:76ch}
+figcaption b{color:var(--ink)}
+.note{border-left:3px solid var(--rule);padding:2px 0 2px 14px;margin:16px 0;font-size:15.5px;max-width:68ch}
+.note.red{border-color:var(--red)}
+ul{margin:0 0 13px;padding-left:20px;max-width:68ch} li{margin-bottom:4px}
+code{font-family:ui-monospace,Consolas,monospace;font-size:.9em;background:color-mix(in srgb,var(--hair) 55%,transparent);padding:1px 5px}
+.demo{width:100%;height:1500px;border:1.5px solid var(--rule);background:var(--paper);display:block}
+@media(max-width:640px){.demo{height:1900px}}
+.foot{font-size:14px;color:var(--ink2)}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+@media(max-width:700px){.cols{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>Surrogate modelling of airfoil lift and drag, and what happens at stall</h1>
+  <p class="by" style="margin-bottom:6px"><b>Riya C.</b></p>
+  <p class="by">A project report. A machine-learning model was trained on 800 CFD solutions of airfoils, used inside a design search, and then tested where it should fail: through stall, against wind-tunnel data.</p>
+  <div class="links">
+    <a href="https://github.com/Riya-247/airfoil-surrogate">Code on GitHub</a>
+    <a href="#demo">Interactive demo</a>
+    <a href="https://github.com/Riya-247/airfoil-surrogate/tree/main/results/airfrans/full">Raw result files</a>
+    <a href="https://github.com/Riya-247/airfoil-surrogate/blob/main/docs/physics_primer.md">Physics primer</a>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#question">1 Question</a><a href="#data">2 Data</a><a href="#method">3 Method</a><a href="#results">4 Results</a>
+    <a href="#optimise">5 Optimisation</a><a href="#stall">6 Stall</a><a href="#demo">7 Demo</a><a href="#limits">8 Limits</a><a href="#repro">9 Reproduce</a>
+  </nav>
+
+  <ul class="glance" aria-label="Results at a glance">
+    <li><b>0.0064</b>average error in lift coefficient on 200 held-out CFD cases (best model, SVR)</li>
+    <li><b>2.7 s</b>for a design search of 5,980 predictions; the same count of CFD runs is estimated at about 104 days</li>
+    <li><b>Tracks to stall</b>the model follows NASA wind-tunnel lift up to about 17°</li>
+    <li class="red"><b>Misses stall</b>at 18° and above it predicts Cl 1.55 to 1.80; the tunnel measured about 1.10</li>
+  </ul>
+</header>
+
+<section id="question">
+  <h2><span class="n">1</span>The question</h2>
+  <p>An airfoil is the cross-section of a wing. Its lift coefficient <b>Cl</b> and drag coefficient <b>Cd</b> depend on its shape, on the angle of attack α, and on the Reynolds number Re, which compares inertial and viscous forces in the flow. Designers find Cl and Cd by solving the Reynolds-averaged Navier-Stokes (RANS) equations, a computer simulation (CFD) that takes about 25 minutes per case on 16 processor cores. A design search needs thousands of cases.</p>
+  <p>A <b>surrogate</b> is a fast statistical model fitted to a set of those solutions. This project asks two things: can a surrogate stand in for the solver inside a design search, and how far can it be trusted when the flow separates from the wing, which is what happens at stall?</p>
+  <p>At small angles, lift rises in a straight line with α. Near 15 to 18° for a symmetric section the flow separates from the upper surface, lift falls, and drag jumps. A model fitted only to attached flow has no way to know that this threshold exists. That is the central observation of the project, and sections 4 to 6 test it.</p>
+</section>
+
+<section id="data">
+  <h2><span class="n">2</span>Data</h2>
+  <p>AirfRANS (Bonnet, Mazari, Cinnella and Gallinari, NeurIPS 2022). The dataset stores the flow fields, so lift and drag were computed here by integrating pressure and wall shear stress over the surface of each airfoil.</p>
+  <div class="tbl"><table>
+    <tr><th>Solutions</th><td class="w">1,000 steady RANS solutions: 800 for training, 200 held out (the dataset's published split). 489 four-digit and 511 five-digit NACA sections.</td></tr>
+    <tr><th>Solver</th><td class="w">OpenFOAM v2112, <code>simpleFoam</code>, k-ω SST turbulence model, wall-resolved</td></tr>
+    <tr><th>Flow</th><td class="w">2D, steady, incompressible; Re 2 to 6 million; Mach below 0.3</td></tr>
+    <tr><th>Angle of attack</th><td class="w">−5° to 15°. The upper limit was chosen by the dataset authors to avoid stall.</td></tr>
+  </table></div>
+  <div class="note red"><b>Almost no stalled flow is in this dataset.</b> That is a design choice of the authors, and it is what makes the stall question interesting.</div>
+  <figure>
+    <img src="demo/flow.jpg" alt="Speed field around a NACA 0012 type airfoil at 12.6 degrees from a CFD solution">
+    <figcaption><b>Fig. 1.</b> One of the training solutions: flow speed around a NACA 0012-like section (11.4% thick) at α = 12.6° and Re = 5.7 million. Light is fast. The flow is attached and the wake is thin. Cl = 1.32, Cd = 0.0162.</figcaption>
+  </figure>
+</section>
+
+<section id="method">
+  <h2><span class="n">3</span>Method</h2>
+  <h3>Inputs and outputs</h3>
+  <p>Each case is described by angle of attack, log Reynolds number, maximum thickness, maximum camber and its position, camber at 75% chord, the thin-airfoil zero-lift angle, and the effective angle α − α<sub>L0</sub>. The model predicts Cl and log<sub>10</sub>(Cd). Drag is predicted on a log scale because it is always positive and spans more than a decade.</p>
+  <h3>Models</h3>
+  <p>Three families were trained and compared: random forest, support-vector regression with an RBF kernel (SVR), and a multilayer perceptron (MLP).</p>
+  <h3>Checking</h3>
+  <ul>
+    <li>The published 800/200 split is used unchanged. The 200 test cases are never used for tuning.</li>
+    <li>Settings are tuned by nested 5-fold cross-validation, with all cases of one geometry kept in the same fold so that a shape never appears in both training and validation.</li>
+    <li>Errors are reported overall and for α ≥ 10°. Drag error is given in drag counts (1 count = 0.0001).</li>
+    <li>A second task trains on −2.5° to 12.5° only and tests outside it, to measure extrapolation in angle.</li>
+  </ul>
+</section>
+
+<section id="results">
+  <h2><span class="n">4</span>Results inside the training range</h2>
+  <p>On the 200 held-out cases the SVR is clearly the most accurate. That fits the physics: in attached flow the map from inputs to lift is smooth and close to linear, which suits a smooth kernel model better than the piecewise-constant steps of a forest.</p>
+  <div class="tbl"><table>
+    <tr><th>Held-out test set</th><th class="num">Cl error, all</th><th class="num">Cl error, α ≥ 10°</th><th class="num">Cd error, all (counts)</th><th class="num">Cd error, α ≥ 10° (counts)</th><th class="num">Cl/Cd rank corr., α ≥ 10°</th></tr>
+    <tr><td>Random forest</td><td class="num">0.0209</td><td class="num">0.0351</td><td class="num">6.2</td><td class="num">12.6</td><td class="num">0.843</td></tr>
+    <tr class="best"><td>SVR (RBF)</td><td class="num">0.0064</td><td class="num">0.0069</td><td class="num">1.6</td><td class="num">5.2</td><td class="num">0.957</td></tr>
+    <tr><td>MLP</td><td class="num">0.0180</td><td class="num">0.0227</td><td class="num">3.0</td><td class="num">7.2</td><td class="num">0.927</td></tr>
+  </table></div>
+  <p>Errors are mean absolute errors against the CFD labels. Nested cross-validation on the 800 training cases agrees (SVR: Cl 0.0066, Cd 2.4 counts), so the test numbers are not a lucky split. The α ≥ 10° group has only 38 test cases, so its figures are noisier.</p>
+  <div class="cols">
+    <figure><img src="results/airfrans/full/parity_test.png" alt="Predicted against CFD Cl and Cd on the held-out test set"><figcaption><b>Fig. 2.</b> Predicted against CFD values on the test set. Points on the diagonal are perfect predictions.</figcaption></figure>
+    <figure><img src="results/airfrans/full/error_vs_alpha.png" alt="Error by angle of attack"><figcaption><b>Fig. 3.</b> Error by angle of attack. Drag error grows as form drag takes a larger share near separation.</figcaption></figure>
+  </div>
+  <h3>Extrapolating in angle of attack</h3>
+  <p>Trained on −2.5° to 12.5° and tested only outside that range (196 cases):</p>
+  <div class="tbl"><table>
+    <tr><th></th><th class="num">Cl error</th><th class="num">Cd error (counts)</th><th class="num">Cl/Cd rank corr.</th></tr>
+    <tr><td>Random forest</td><td class="num">0.080</td><td class="num">21.5</td><td class="num">0.931</td></tr>
+    <tr class="best"><td>SVR (RBF)</td><td class="num">0.017</td><td class="num">8.9</td><td class="num">0.990</td></tr>
+    <tr><td>MLP</td><td class="num">0.021</td><td class="num">11.9</td><td class="num">0.983</td></tr>
+  </table></div>
+  <p>Beyond the training range all three models under-predict drag at both ends. Lift keeps following its straight line, while drag, which curves upward, does not.</p>
+</section>
+
+<section id="optimise">
+  <h2><span class="n">5</span>Design optimisation</h2>
+  <p>A genetic algorithm searched over camber, camber position, thickness and angle of attack at Re = 4 million to maximise predicted Cl/Cd. The bounds are the sampling ranges of the dataset. Five independent runs were compared with a random-search baseline of the same budget: 5,980 surrogate evaluations per search.</p>
+  <div class="tbl"><table>
+    <tr><th></th><th class="num">SVR</th><th class="num">MLP</th><th class="num">Random forest</th></tr>
+    <tr><td>Best predicted Cl/Cd</td><td class="num">112.8</td><td class="num">113.7</td><td class="num">103.8</td></tr>
+    <tr><td>Random search, same budget</td><td class="num">111.7</td><td class="num">111.5</td><td class="num">101.7</td></tr>
+    <tr><td>Optimal section (M, P, XX)</td><td class="num">6.7, 3.3, 5.0</td><td class="num">7.0, 3.1, 5.0</td><td class="num">6.7, 4.6, 6.8</td></tr>
+    <tr><td>Optimal angle of attack</td><td class="num">5.9°</td><td class="num">6.2°</td><td class="num">6.8°</td></tr>
+    <tr><td>Search time (2-core cloud machine)</td><td class="num">2.7 s</td><td class="num">2.3 s</td><td class="num">8.6 s</td></tr>
+  </table></div>
+  <figure><img src="results/airfrans/full/optimisation_svr.png" alt="Genetic algorithm convergence, optimal section and cost comparison for the SVR"><figcaption><b>Fig. 4.</b> Convergence of the genetic algorithm, the optimal section, and the cost comparison against CFD.</figcaption></figure>
+  <h3>Cost, with its assumptions</h3>
+  <p>5,980 CFD solutions at 25 minutes each is about 104 days, against 2.7 seconds. That is an estimate for the same number of evaluations. A real CFD optimiser would use a sample-efficient method and far fewer runs, so the ratio overstates the practical advantage. The surrogate also has a one-off cost the comparison leaves out: generating the training data, about 17 days at that rate. The break-even is therefore around 1,000 evaluations.</p>
+  <div class="note red"><b>How much to trust the optimum: not much yet.</b> It is a prediction of the surrogate, not a CFD-verified design. The three models disagree on the best shape. The SVR and MLP optima sit on the edge of the sampled design space, where models are least constrained. The genetic algorithm beats random search by only 1 to 2% in final value; its benefit is speed of convergence. The next step is to run the proposed section through OpenFOAM.</div>
+</section>
+
+<section id="stall">
+  <h2><span class="n">6</span>Testing against experiment, through stall</h2>
+  <p>The models were compared with NASA wind-tunnel measurements of the NACA 0012 at Re = 6 million (Ladson, NASA TM 4074; 53 points from −4° to 19.3°) and evaluated well past the 15° limit of the training data.</p>
+  <figure><img src="results/airfrans/full/validation_naca0012.png" alt="NACA 0012 lift curve, drag, and model uncertainty against error, surrogates versus wind-tunnel data through stall"><figcaption><b>Fig. 5.</b> Left: lift against angle of attack, surrogates against experiment. Centre: drag. Right: the random forest's own uncertainty estimate against its actual error. The shaded region is beyond the training data.</figcaption></figure>
+  <p>In the experiment, lift peaks at <b>Cl = 1.635 at 17.2°</b>. At 18° and above it has fallen to about 1.0 to 1.2, and drag has jumped from about 0.025 to between 0.19 and 0.43. Stall takes place within one degree.</p>
+  <div class="tbl"><table>
+    <tr><th>Mean absolute error in Cl</th><th class="num">Inside training range<br>(α ≤ 14.9°, 38 points)</th><th class="num">Beyond range, still attached<br>(14.9° to 17.5°, 9 points)</th><th class="num">Stalled<br>(above 17.5°, 6 points)</th></tr>
+    <tr><td>Random forest</td><td class="num">0.021</td><td class="num">0.065</td><td class="num">0.456</td></tr>
+    <tr><td>SVR</td><td class="num">0.024</td><td class="num">0.025</td><td class="num">0.571</td></tr>
+    <tr><td>MLP</td><td class="num">0.032</td><td class="num">0.025</td><td class="num">0.701</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Inside the range</b>, all three agree with experiment to within a few hundredths in Cl.</li>
+    <li><b>Beyond the range but before stall</b>, the SVR and MLP still track the experiment, because the attached-flow trend simply continues.</li>
+    <li><b>At stall, all fail.</b> At the six stalled points the models predict Cl of about 1.55 (forest), 1.67 (SVR) and 1.80 (MLP) against a measured mean of 1.10. Predicted drag is 0.026 to 0.038 against 0.28 measured, an under-prediction by a factor of 7 to 11.</li>
+    <li><b>The forest's own uncertainty does not warn.</b> The spread across its trees rises by only about 30% at the stalled points (0.19 to 0.25), while its actual error rises more than twenty-fold. The spread is roughly constant and carries no information about stall.</li>
+  </ul>
+  <h3>Why</h3>
+  <p>As α increases, the suction peak steepens the adverse pressure gradient, the boundary layer thickens, and wall shear falls to zero: the flow separates. That changes the structure of the flow, not just its slope. Where it happens depends on the pressure distribution, which is a result of the flow and not an input to the model. A model fitted only to attached flow has no information about the threshold, whatever its type, and continues the trend. Details are in the <a href="https://github.com/Riya-247/airfoil-surrogate/blob/main/docs/physics_primer.md">physics primer</a>.</p>
+  <div class="note"><b>What this does and does not show.</b> The post-stall evidence is six points from one experiment: a clear illustration, not a statistical test. Near stall, the gap between surrogate and experiment mixes the surrogate's extrapolation error, the error of RANS itself in separated flow, and the tunnel's departure from two dimensions. This comparison cannot separate them. Doing so needs stall-resolved CFD labels at the same conditions.</div>
+</section>
+
+<section id="demo">
+  <h2><span class="n">7</span>Try the model</h2>
+  <p>The page below runs the trained SVR in the browser. Change the shape, angle and Reynolds number to see its prediction, overlay the wind-tunnel data, and press the sweep button to watch the angle run through stall. It is a prediction, not a flow simulation. <a href="demo/index.html">Open it as its own page.</a></p>
+  <iframe class="demo" src="demo/index.html" title="Interactive airfoil surrogate demo" loading="lazy"></iframe>
+</section>
+
+<section id="limits">
+  <h2><span class="n">8</span>Limitations</h2>
+  <ul>
+    <li>Two-dimensional, steady, incompressible flow; NACA 4- and 5-digit sections only. Expect poor transfer to other shapes.</li>
+    <li>1,000 training solutions, whose labels come from a RANS turbulence model with its own error, largest in separated flow.</li>
+    <li>The training data stop at 15°, so "high angle of attack" here means 10° to 15°, not stall.</li>
+    <li>One experiment (NACA 0012, Re = 6 million) is used for validation.</li>
+    <li>The optimum has not been verified with CFD. The CFD cost is an estimate from the dataset paper, not a measurement, and the timings come from a 2-core cloud machine.</li>
+  </ul>
+</section>
+
+<section id="repro">
+  <h2><span class="n">9</span>Reproduce and references</h2>
+  <p>Everything is in the <a href="https://github.com/Riya-247/airfoil-surrogate">GitHub repository</a>: code, tests, metrics, and every figure on this page. The commands are listed in its README. The full pipeline needs the AirfRANS archive (about 15 GB unpacked); the committed result files let you inspect every number here without it.</p>
+  <ul>
+    <li>F. Bonnet, J. A. Mazari, P. Cinnella, P. Gallinari. AirfRANS: High Fidelity Computational Fluid Dynamics Dataset for Approximating Reynolds-Averaged Navier-Stokes Solutions. NeurIPS 2022, Datasets and Benchmarks Track.</li>
+    <li>C. L. Ladson. Effects of Independent Variation of Mach and Reynolds Numbers on the Low-Speed Aerodynamic Characteristics of the NACA 0012 Airfoil Section. NASA TM 4074, 1988.</li>
+    <li>NASA Turbulence Modeling Resource, NACA 0012 validation case.</li>
+    <li>I. H. Abbott and A. E. von Doenhoff. Theory of Wing Sections. Dover, 1959.</li>
+  </ul>
+  <p class="foot">All results on this page come from real runs of the code in the repository on the real datasets.</p>
+</section>
+
+</div>
+</body>
+</html>
