@@ -1,0 +1,211 @@
+<title>Airfoil Surrogate Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Franklin:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+/* Layout: a technical report. Plain column, figures with numbered captions, a drawing sheet with a title block.
+   Palette: ink on paper, hairline rules, one red used only for "outside the data". No cards, no accent fill. */
+:root{--paper:#fbfbfa;--ink:#161616;--ink2:#58595b;--rule:#161616;--hair:#c9c9c6;--red:#c4281c;--hatch:#d9a9a4;--f:"Libre Franklin","Helvetica Neue",Arial,sans-serif;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#141414;--ink:#ececea;--ink2:#a3a4a6;--rule:#ececea;--hair:#3b3b3a;--red:#ff6b5c;--hatch:#6a3a36;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#141414;--ink:#ececea;--ink2:#a3a4a6;--rule:#ececea;--hair:#3b3b3a;--red:#ff6b5c;--hatch:#6a3a36;color-scheme:dark}
+body{background:var(--paper);color:var(--ink);font-family:var(--f);font-size:16px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+.page{max-width:900px;margin:0 auto}
+h1{font-size:26px;line-height:1.2;font-weight:700;margin:0 0 6px;letter-spacing:-.01em;text-wrap:balance}
+.by{color:var(--ink2);font-size:14px;margin:0 0 18px}
+p{margin:0 0 12px;max-width:66ch}
+.rule{border:0;border-top:1px solid var(--rule);margin:26px 0 14px}
+.fig{margin:0}
+.cap{font-size:13.5px;color:var(--ink2);max-width:74ch;margin-top:8px}
+.cap b{color:var(--ink);font-weight:700}
+.top{display:grid;grid-template-columns:minmax(0,250px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:780px){.top{grid-template-columns:minmax(0,1fr);gap:18px}}
+.form{display:flex;flex-direction:column;gap:12px;font-size:14px}
+.row label{display:flex;justify-content:space-between;gap:8px}
+.row output{font-variant-numeric:tabular-nums;font-weight:500}
+.row small{display:block;color:var(--ink2);font-size:12px}
+input[type=range]{width:100%;margin:2px 0 0;accent-color:var(--ink)}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+button{font:500 13px var(--f);color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:0;padding:5px 9px;cursor:pointer}
+button:hover{background:var(--ink);color:var(--paper)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.check{display:flex;gap:8px;font-size:13px;color:var(--ink2);align-items:flex-start}
+.sheet{border:1.5px solid var(--rule);min-width:0}
+.sheet svg{display:block;width:100%;height:auto}
+.tb{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:1.5px solid var(--rule)}
+.tb div{padding:6px 10px;border-left:1px solid var(--rule);min-width:0}
+.tb div:first-child{border-left:0}
+.tb span{display:block;font-size:11px;color:var(--ink2);letter-spacing:.02em}
+.tb strong{font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+@media(max-width:520px){.tb{grid-template-columns:repeat(3,minmax(0,1fr))}.tb div:nth-child(4){border-left:0;border-top:1px solid var(--rule)}.tb div:nth-child(5){border-top:1px solid var(--rule)}.tb div:nth-child(3){}}
+.note{border-top:1px solid var(--rule);padding:7px 10px;font-size:13.5px}
+.note.warn{color:var(--red)} .note b{font-weight:700}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+@media(max-width:780px){.two{grid-template-columns:minmax(0,1fr)}}
+.plot svg{width:100%;height:auto;display:block}
+.plot text{font-family:var(--f);font-size:11px;fill:var(--ink2);font-variant-numeric:tabular-nums}
+.flow img{display:block;width:100%;height:auto;border:1.5px solid var(--rule)}
+</style>
+
+<div class="page">
+  <h1>Airfoil Surrogate Explorer</h1>
+  <p class="by">Lift and drag of NACA 4-digit sections, predicted by a support-vector regression model trained on AirfRANS</p>
+  <p>Each point in the training set is a steady RANS solution (OpenFOAM, k-ω SST) that took about 25 minutes on 16 cores. The model learned from 800 of them and now answers in under a millisecond. Move the controls and read off the prediction. Then raise the angle of attack past 15° and watch what happens to the model and to the wind-tunnel measurements.</p>
+
+  <hr class="rule">
+  <div class="top">
+    <form class="form" onsubmit="return false" aria-label="Inputs">
+      <div class="presets">
+        <button id="p0012" type="button">NACA 0012</button>
+        <button id="p4412" type="button">NACA 4412</button>
+        <button id="pwarm" type="button">6-3-16</button>
+      </div>
+      <div class="row"><label for="M">Camber, M <output id="oM"></output></label><input id="M" type="range" min="0" max="7" step="0.1"></div>
+      <div class="row"><label for="P">Camber position, P <output id="oP"></output></label><input id="P" type="range" min="1.5" max="7" step="0.1"><small>tenths of chord from the nose</small></div>
+      <div class="row"><label for="T">Thickness, XX <output id="oT"></output></label><input id="T" type="range" min="5" max="20" step="0.1"></div>
+      <div class="row"><label for="A">Angle of attack, α <output id="oA"></output></label><input id="A" type="range" min="-5" max="22" step="0.1"></div>
+      <div class="row"><label for="R">Reynolds number <output id="oR"></output></label><input id="R" type="range" min="2" max="6" step="0.1"></div>
+      <div><button id="sweep" type="button">Sweep α from −5° to 22°</button></div>
+      <label class="check"><input id="showExp" type="checkbox" checked><span>Show NASA wind-tunnel data for the NACA 0012 (Ladson, Re 6 million)</span></label>
+    </form>
+
+    <figure class="fig">
+      <div class="sheet">
+        <div id="stage"></div>
+        <div class="tb">
+          <div><span>Cl</span><strong id="vCl"></strong></div>
+          <div><span>Cd</span><strong id="vCd"></strong></div>
+          <div><span>Cl / Cd</span><strong id="vLD"></strong></div>
+          <div><span>α</span><strong id="vA"></strong></div>
+          <div><span>Re</span><strong id="vR"></strong></div>
+        </div>
+        <div class="note" id="status" role="status"></div>
+      </div>
+      <figcaption class="cap"><b>Fig. 1.</b> Surrogate prediction for the chosen section. Chord 1 m, flow left to right, section pitched about its quarter chord. The lift arrow is drawn to scale. The dashed arc is α.</figcaption>
+    </figure>
+  </div>
+
+  <hr class="rule">
+  <div class="two">
+    <figure class="fig plot"><div id="chCl"></div><figcaption class="cap"><b>Fig. 2a.</b> Lift coefficient against angle of attack. Line: surrogate. Circles: wind tunnel, NACA 0012, Re 6 million. Hatched: beyond the training angles. The dot marks the current setting.</figcaption></figure>
+    <figure class="fig plot"><div id="chCd"></div><figcaption class="cap"><b>Fig. 2b.</b> Drag coefficient for the same sweep. The model predicts drag on a log scale, so its error stays proportional to the value.</figcaption></figure>
+  </div>
+
+  <hr class="rule">
+  <figure class="fig flow">
+    <img alt="Speed field around a NACA 0012 at 12.6 degrees, computed by RANS" src="/*FLOW*/">
+    <figcaption class="cap"><b>Fig. 3.</b> One of the training solutions, the kind the model replaces. NACA 0012-like section (thickness 11.4%) at α = 12.6° and Re = 5.7 million, flow speed relative to the freestream, light is fast. The flow stays attached and the wake is thin, which is why Cl = 1.32 and Cd = 0.0162 here. The dataset stops at 15° so that flows like this one stay attached.</figcaption>
+  </figure>
+
+  <hr class="rule">
+  <p><b>Why the shaded zone matters.</b> Past about 15° a real airfoil stalls: the boundary layer separates and lift falls. The training data holds almost no separated flow, so the model has nothing to learn stall from. Its lift curve keeps rising with no warning in its own output. Against the wind-tunnel points the model is accurate below 15° and wrong by several times as much above it. The page flags this itself because the model will not.</p>
+  <p class="cap">On cases held out from training, the average error is about 0.006 in Cl and 2 drag counts (1 count = 0.0001). Those are errors against other CFD runs, not against experiment. The model was trained only on NACA 4- and 5-digit shapes in Re 2 to 6 million and cannot be trusted outside them. Code, metrics and the validation figure are in the project repository.</p>
+</div>
+
+<script>
+/*CORE*/
+const J = /*MODEL*/;
+</script>
+<script>
+const model = makeModel(J);
+const $ = id => document.getElementById(id);
+const S = {M:0, P:4, T:12, A:8, R:6};
+const A_MIN = -5, A_MAX = 22, A_TRAIN = J.alpha_train_max;
+const NS = "http://www.w3.org/2000/svg";
+const f = (v, d) => v.toFixed(d).replace("-", "−");
+let geo = descriptors(S.M, S.P, S.T);
+function predictAt(alpha) { const p = model.predict(featureVector(geo, alpha, S.R * 1e6)); return {cl: p.cl, cd: p.cd, z: p.z}; }
+function sweepCurve() { const pts = []; for (let a = A_MIN; a <= A_MAX + 1e-9; a += 0.5) { const p = predictAt(a); pts.push({a, cl: p.cl, cd: p.cd}); } return pts; }
+
+function drawStage(p, extrap) {
+  const W = 760, H = 330, cx = 330, cy = 165, sc = 330;
+  const s = naca4Surfaces(S.M, S.P, S.T);
+  const xs = s.xu.concat(s.xl.slice().reverse()), ys = s.yu.concat(s.yl.slice().reverse());
+  const pts = xs.map((x, i) => `${((x - 0.25) * sc).toFixed(1)},${(-ys[i] * sc).toFixed(1)}`).join(" ");
+  const col = extrap ? "var(--red)" : "var(--ink)";
+  const liftPx = Math.max(-110, Math.min(150, p.cl * 70));
+  let flow = "";
+  for (let i = 0; i < 6; i++) { const y = 54 + i * 44; flow += `<line x1="22" y1="${y}" x2="104" y2="${y}" stroke="var(--ink2)" stroke-width="1"/><path d="M104 ${y} l-8 -3 v6 z" fill="var(--ink2)"/>`; }
+  let arc = "";
+  if (Math.abs(S.A) >= 1) {
+    const R = 215, a = S.A * Math.PI / 180, ex = R * Math.cos(a), ey = -R * Math.sin(a), mid = a / 2;
+    arc = `<line x1="0" y1="0" x2="${R + 28}" y2="0" stroke="var(--ink2)" stroke-width="1" stroke-dasharray="2 4"/>
+      <path d="M${R} 0 A${R} ${R} 0 0 ${S.A > 0 ? 0 : 1} ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="var(--ink)" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="${((R + 12) * Math.cos(mid)).toFixed(1)}" y="${(-(R + 12) * Math.sin(mid) + 4).toFixed(1)}" font-size="13" fill="var(--ink)" style="font-family:var(--f)">α ${f(S.A, 1)}°</text>`;
+  }
+  const lift = Math.abs(liftPx) < 3 ? "" : `<line x1="0" y1="0" x2="0" y2="${(-liftPx).toFixed(1)}" stroke="${col}" stroke-width="2.2"/>
+    <path d="M0 ${(-liftPx).toFixed(1)} l-5 ${liftPx > 0 ? 11 : -11} h10 z" fill="${col}"/>
+    <text x="9" y="${(-liftPx + (liftPx > 0 ? 6 : -2)).toFixed(1)}" font-size="12" fill="${col}" style="font-family:var(--f)">lift</text>`;
+  $("stage").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="NACA ${f(S.M,1)} ${f(S.P,1)} ${f(S.T,1)} airfoil at ${f(S.A,1)} degrees">
+    ${flow}<text x="22" y="30" font-size="12" fill="var(--ink2)" style="font-family:var(--f)">freestream</text>
+    <g transform="translate(${cx} ${cy})">
+      <g transform="rotate(${-S.A})"><polygon points="${pts}" fill="var(--hair)" fill-opacity=".55" stroke="var(--ink)" stroke-width="1.6" stroke-linejoin="round"/></g>
+      ${arc}${lift}
+      <circle r="2.5" fill="var(--ink)"/>
+    </g>
+    <text x="${W - 12}" y="${H - 12}" text-anchor="end" font-size="12" fill="var(--ink2)" style="font-family:var(--f)">NACA ${f(S.M,1)} · ${f(S.P,1)} · ${f(S.T,1)}</text>
+  </svg>`;
+}
+
+function el(name, attrs, text) { const e = document.createElementNS(NS, name); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
+let uid = 0;
+function chart(host, o) {
+  const W = 420, H = 310, m = {l: 54, r: 12, t: 10, b: 40}, pid = "h" + (uid++);
+  const X = a => m.l + (a - A_MIN) / (A_MAX - A_MIN) * (W - m.l - m.r);
+  const Y = v => H - m.b - (v - o.ymin) / (o.ymax - o.ymin) * (H - m.t - m.b);
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": o.label});
+  const defs = el("defs", {}); const pat = el("pattern", {id: pid, width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"});
+  pat.appendChild(el("line", {x1: 0, y1: 0, x2: 0, y2: 6, stroke: "var(--hatch)", "stroke-width": 1.3})); defs.appendChild(pat); svg.appendChild(defs);
+  svg.appendChild(el("rect", {x: X(A_TRAIN), y: m.t, width: X(A_MAX) - X(A_TRAIN), height: H - m.t - m.b, fill: `url(#${pid})`}));
+  for (let v = o.ymin; v <= o.ymax + 1e-9; v += o.ystep) {
+    if (v > o.ymin + 1e-9 && v < o.ymax - 1e-9) svg.appendChild(el("line", {x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: "var(--hair)", "stroke-width": .8}));
+    svg.appendChild(el("text", {x: m.l - 6, y: Y(v) + 4, "text-anchor": "end"}, o.fmt(v)));
+  }
+  for (let a = -5; a <= 20; a += 5) {
+    svg.appendChild(el("line", {x1: X(a), x2: X(a), y1: H - m.b, y2: H - m.b - 5, stroke: "var(--ink)"}));
+    svg.appendChild(el("text", {x: X(a), y: H - m.b + 15, "text-anchor": "middle"}, f(a, 0) + "°"));
+  }
+  svg.appendChild(el("text", {x: (m.l + W - m.r) / 2, y: H - 6, "text-anchor": "middle"}, "angle of attack"));
+  svg.appendChild(el("text", {x: 12, y: (m.t + H - m.b) / 2, "text-anchor": "middle", transform: `rotate(-90 12 ${(m.t + H - m.b) / 2})`}, o.ylabel));
+  const clamp = v => Math.max(o.ymin, Math.min(o.ymax, v));
+  if (o.exp) for (const r of o.exp) if (r[1] >= o.ymin && r[1] <= o.ymax) svg.appendChild(el("circle", {cx: X(r[0]), cy: Y(r[1]), r: 3.2, fill: "none", stroke: "var(--ink)", "stroke-width": 1.3}));
+  svg.appendChild(el("path", {d: o.curve.map((p, i) => `${i ? "L" : "M"}${X(p.a).toFixed(1)} ${Y(clamp(p.v)).toFixed(1)}`).join(""), fill: "none", stroke: "var(--ink)", "stroke-width": 2, "stroke-linejoin": "round"}));
+  const xa = X(S.A), ya = Y(clamp(o.now)), c = S.A > A_TRAIN ? "var(--red)" : "var(--ink)";
+  svg.appendChild(el("line", {x1: xa, x2: xa, y1: m.t, y2: H - m.b, stroke: c, "stroke-width": 1, "stroke-dasharray": "3 3"}));
+  svg.appendChild(el("circle", {cx: xa, cy: ya, r: 5, fill: c, stroke: "var(--paper)", "stroke-width": 1.5}));
+  svg.appendChild(el("rect", {x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "none", stroke: "var(--ink)", "stroke-width": 1.2}));
+  host.replaceChildren(svg);
+}
+
+function update() {
+  geo = descriptors(S.M, S.P, S.T);
+  const p = predictAt(S.A), extrap = S.A > A_TRAIN, nn = model.nnDistance(p.z);
+  $("oM").textContent = f(S.M, 1) + " %"; $("oP").textContent = f(S.P, 1); $("oT").textContent = f(S.T, 1) + " %";
+  $("oA").textContent = f(S.A, 1) + "°"; $("oR").textContent = f(S.R, 1) + " million";
+  $("vCl").textContent = f(p.cl, 3); $("vCd").textContent = f(p.cd, 4); $("vLD").textContent = f(p.cl / p.cd, 1);
+  $("vA").textContent = f(S.A, 1) + "°"; $("vR").textContent = f(S.R, 1) + "M";
+  const st = $("status");
+  if (extrap) { st.className = "note warn"; st.innerHTML = `<b>Outside the training data.</b> It stops at ${f(A_TRAIN, 1)}°. Real airfoils stall somewhere past that and the model has never seen stall. Do not trust this value.`; }
+  else if (nn > J.nn_p95) { st.className = "note warn"; st.innerHTML = `<b>Unusual combination.</b> This shape, angle and Reynolds number sit farther from the training points than 95% of those points sit from each other. Expect larger error.`; }
+  else { st.className = "note"; st.innerHTML = `<b>Inside the training data.</b> Close to cases the model has seen.`; }
+  drawStage(p, extrap);
+  const pts = sweepCurve(), exp = $("showExp").checked ? J.ladson : null;
+  chart($("chCl"), {label: "Lift coefficient against angle of attack", ymin: -1, ymax: 2.2, ystep: 0.4, fmt: v => f(v, 1), ylabel: "Cl", curve: pts.map(q => ({a: q.a, v: q.cl})), now: p.cl, exp: exp && exp.map(r => [r[0], r[1]])});
+  chart($("chCd"), {label: "Drag coefficient against angle of attack", ymin: 0, ymax: 0.06, ystep: 0.01, fmt: v => f(v, 2), ylabel: "Cd", curve: pts.map(q => ({a: q.a, v: q.cd})), now: p.cd, exp: exp && exp.map(r => [r[0], r[2]])});
+}
+const keys = [["M","M"],["P","P"],["T","T"],["A","A"],["R","R"]];
+for (const [id, k] of keys) $(id).addEventListener("input", e => { stopSweep(); S[k] = parseFloat(e.target.value); update(); });
+$("showExp").addEventListener("input", update);
+function setAll(o, exp) { stopSweep(); Object.assign(S, o); for (const [id, k] of keys) $(id).value = S[k]; $("showExp").checked = exp; update(); }
+$("p0012").onclick = () => setAll({M: 0, P: 4, T: 12, A: 8, R: 6}, true);
+$("p4412").onclick = () => setAll({M: 4, P: 4, T: 12, A: 6, R: 6}, false);
+$("pwarm").onclick = () => setAll({M: 6, P: 3, T: 16, A: 10, R: 3}, false);
+let timer = null;
+function stopSweep() { if (timer) { clearInterval(timer); timer = null; $("sweep").textContent = "Sweep α from −5° to 22°"; } }
+$("sweep").onclick = () => {
+  if (timer) { stopSweep(); return; }
+  S.A = A_MIN; $("sweep").textContent = "Stop";
+  timer = setInterval(() => { S.A = Math.round((S.A + 0.2) * 10) / 10; if (S.A >= A_MAX) { S.A = A_MAX; stopSweep(); } $("A").value = S.A; update(); }, 70);
+};
+for (const [id, k] of keys) $(id).value = S[k];
+update();
+</script>

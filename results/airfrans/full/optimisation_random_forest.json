@@ -1,0 +1,31 @@
+{
+  "source": "airfrans",
+  "model": "random_forest",
+  "Re": 4000000.0,
+  "n_evaluations_per_search": 5980,
+  "n_searches": 5,
+  "surrogate_wall_clock_s_per_search": 8.596201691399983,
+  "surrogate_time_us_per_evaluation": 1437.4919216387932,
+  "time_split_s": {
+    "geometry_features": 16.93782408199968,
+    "model": 33.12904236200711
+  },
+  "best_LD_surrogate": 103.75214158584409,
+  "best_design": {
+    "M (% camber)": 6.693151595550464,
+    "P (tenths chord)": 4.628298273236552,
+    "XX (% thickness)": 6.80377846803663,
+    "alpha (deg)": 6.813436315573501
+  },
+  "random_search_best_LD_same_budget": 101.74446080280113,
+  "cfd_assumption": "25 min per simulation on 16 cores (AirfRANS paper, Table 4)",
+  "cfd_in_the_loop_days_for_same_search": 103.81944444444444,
+  "cfd_core_hours_for_same_search": 39866.666666666664,
+  "one_off_dataset_cost_days_same_hardware": 17.36111111111111,
+  "one_off_training_seconds": 48.45195738800021,
+  "break_even_evaluations": 1000,
+  "speedup_per_search_excluding_dataset": 1043484.1249681218,
+  "distance_to_nearest_training_point": 0.5044010057727268,
+  "typical_nearest_neighbour_distance_p95": 1.1879370639516431,
+  "bounds_hit": []
+}
